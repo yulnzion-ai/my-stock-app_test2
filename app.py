@@ -10,7 +10,7 @@ except:
     st.warning("⚠️ API 키가 설정되지 않았습니다. Streamlit Secrets에 GEMINI_API_KEY를 등록해주세요.")
 
 # 최신 2.0 Flash-Lite 모델 설정
-model = genai.GenerativeModel('gemini-2.0-flash-lite-preview-02-05')
+model = genai.GenerativeModel('gemini-2.0-flash-lite-preview')
 
 # 2. UI 레이아웃 및 스타일
 st.set_page_config(page_title="Golden-Bell AI Pro", layout="wide")
