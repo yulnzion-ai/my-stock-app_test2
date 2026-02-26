@@ -2,69 +2,64 @@ import streamlit as st
 import google.generativeai as genai
 import yfinance as yf
 from datetime import datetime
-import time
 
 # 1. 페이지 기본 설정
 st.set_page_config(page_title="Golden-Bell AI Pro", layout="wide")
 
-# 2. 모델 연결 함수 (3단계 자동 백업 시스템)
-@st.cache_resource
-def setup_ai():
+# 2. 모델 연결 함수 (구글 서버 상황에 맞춰 3개 모델 자동 시도)
+def load_ai_model():
     try:
+        if "GEMINI_API_KEY" not in st.secrets:
+            return None, "Secrets에 GEMINI_API_KEY가 설정되지 않았습니다."
+        
         api_key = st.secrets["GEMINI_API_KEY"]
         genai.configure(api_key=api_key)
         
-        # 시도해볼 모델 목록 (구글 서버 상황에 따라 유동적)
-        model_candidates = ['gemini-2.0-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash']
+        # 시도할 모델 리스트 (최신순)
+        # 2.0 시리즈가 거부될 경우를 대비해 가장 안정적인 1.5 버전을 마지막에 배치
+        models_to_try = ['gemini-2.0-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash']
         
-        for model_name in model_candidates:
+        for model_name in models_to_try:
             try:
                 model = genai.GenerativeModel(model_name)
-                # 모델이 살아있는지 가벼운 테스트
-                model.generate_content("test", generation_config={"max_output_tokens": 1})
+                # 모델이 정상인지 아주 짧은 테스트 호출
+                model.generate_content("hi", generation_config={"max_output_tokens": 1})
                 return model, model_name
             except:
                 continue
-        return None, None
+                
+        return None, "모든 Gemini 모델 명칭이 거부되었습니다. API 키 활성화 상태를 확인해주세요."
     except Exception as e:
         return None, str(e)
 
-model, active_model_name = setup_ai()
+# 모델 로드 (캐싱 없이 매번 시도하여 상태 반영)
+model, status = load_ai_model()
 
 # 3. UI 레이아웃
-st.title("🌅 오늘의 단타 모닝브리핑 (정밀 데이터 Ver.)")
-if active_model_name:
-    st.caption(f"기준일: {datetime.now().strftime('%Y년 %m월 %d일')} | 가동 엔진: {active_model_name}")
+st.title("🌅 오늘의 단타 모닝브리핑 (최종 안정화 Ver.)")
+
+if model:
+    st.success(f"✅ AI 엔진 가동 중: {status}")
 else:
-    st.error("⚠️ AI 엔진을 불러올 수 없습니다. API 키를 확인해주세요.")
+    st.error(f"❌ AI 엔진 연결 실패: {status}")
+    st.info("💡 해결 방법: 1. API Studio에서 새 키 발급 -> 2. Streamlit Secrets 업데이트 -> 3. 5분 뒤 새로고침")
 
 news_type = st.selectbox("📰 뉴스 유형 선택", 
                          ["🔥 전체 카테고리 통합 풀-브리핑", "정치테마", "기업공시", "글로벌이슈", "테마급등"])
 
-# 4. 분석 실행 버튼
+# 4. 분석 실행
 if st.button(f"🚀 실시간 정밀 분석 시작", use_container_width=True):
     if not model:
-        st.error("API 키 설정이 필요합니다.")
+        st.error("엔진이 연결되지 않아 분석을 시작할 수 없습니다.")
     else:
-        with st.spinner("AI가 최신 뉴스와 주가를 정밀 분석 중입니다..."):
-            final_prompt = f"""
-            오늘({datetime.now().strftime('%Y-%m-%d')})의 최신 소식을 웹 검색하여 {news_type}를 작성하세요.
-            반드시 수혜 종목 3개 이상의 상세 전략과 실시간 주가 데이터를 포함하여 아주 길게 작성하세요.
-            """
-            
+        with st.spinner("최신 데이터를 가져오는 중입니다..."):
+            prompt = f"오늘({datetime.now().strftime('%Y-%m-%d')}) {news_type} 관련 뉴스 헤드라인과 수혜주, 매매 전략을 아주 상세히 리포트해줘."
             try:
-                response = model.generate_content(final_prompt)
+                response = model.generate_content(prompt)
                 st.markdown("---")
                 st.markdown(response.text)
-                st.success(f"✅ 분석 완료 (엔진: {active_model_name})")
             except Exception as e:
-                error_msg = str(e)
-                if "429" in error_msg:
-                    st.error("⏳ 사용량 초과! 1분만 기다렸다가 다시 눌러주세요.")
-                elif "400" in error_msg:
-                    st.error("❌ API 키가 유효하지 않습니다. 다시 발급받아주세요.")
-                else:
-                    st.error(f"❌ 오류 발생: {error_msg}")
+                st.error(f"분석 중 오류 발생: {e}")
 
 st.divider()
-st.info("💡 주가 정보는 yfinance API를 통해 실시간으로 호출됩니다.")
+st.info("💡 주가 정보는 yfinance API를 통해 호출됩니다.")
